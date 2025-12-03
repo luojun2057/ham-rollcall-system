@@ -27,6 +27,7 @@ RUN npm install -g pm2
 
 # 复制根目录的package.json和node_modules
 COPY package*.json ./
+COPY .env ./
 COPY --from=build /app/node_modules ./node_modules
 
 # 复制后端代码
