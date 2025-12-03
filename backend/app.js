@@ -23,9 +23,23 @@ app.use('/api/sessions', sessionRoutes);
 app.use('/api', importExportRoutes);
 app.use('/api', logRoutes);
 
-// 测试路由
-app.get('/', (req, res) => {
-  res.send('Ham Rollcall System API');
+// 配置静态文件服务
+const path = require('path');
+// 后端运行时，前端构建产物位于 /app/frontend/dist 目录
+// 本地开发时，前端构建产物位于 ../frontend/dist 目录
+const frontendDistPath = path.join(__dirname, '../frontend/dist');
+
+// 静态文件服务 - 先检查请求是否匹配静态文件
+app.use(express.static(frontendDistPath));
+
+// 处理 SPA 路由 - 对于所有非 API 请求，返回 index.html
+app.use((req, res, next) => {
+  // 检查是否是 API 请求
+  if (req.path.startsWith('/api')) {
+    return next(); // 继续处理 API 请求
+  }
+  // 对于非 API 请求，返回 index.html
+  res.sendFile(path.join(frontendDistPath, 'index.html'));
 });
 
 // 初始化数据库并启动服务器
