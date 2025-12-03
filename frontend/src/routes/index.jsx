@@ -10,6 +10,8 @@ import Logs from '../pages/Logs';
 import Users from '../pages/Users';
 import ImportExport from '../pages/ImportExport';
 import Settings from '../pages/Settings';
+
+import Profile from '../pages/Profile';
 import useAuthStore from '../store/authStore';
 
 // 受保护的路由组件
@@ -97,6 +99,15 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <ImportExport />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <Profile />
           </ProtectedRoute>
         }
       />

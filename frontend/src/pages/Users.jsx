@@ -34,31 +34,48 @@ const Users = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
 
-  // 检查用户是否为超级管理员
+  // 根据角色检查权限，普通操作员只能查看自己，管理员不能修改超级管理员
   useEffect(() => {
-    if (user?.role !== 'super_admin') {
-      message.error('只有超级管理员可以访问用户管理页面');
-      navigate('/');
-    }
+    // 所有角色都可以访问用户管理页面，只是看到的内容不同
   }, [user, navigate]);
 
   // 获取用户列表
   const fetchUsers = async () => {
     setLoading(true);
     try {
+      console.log('开始获取用户列表...');
       const response = await axiosInstance.get('/users');
-      setUsers(response.data);
+      console.log('获取用户列表成功:', response.data);
+      let usersData = response.data;
+      
+      // 确保用户数据是数组
+      if (!Array.isArray(usersData)) {
+        console.error('获取的用户数据不是数组:', usersData);
+        usersData = [];
+      }
+      
+      setUsers(usersData);
+      console.log('用户列表已更新:', usersData.length, '个用户');
     } catch (error) {
-      message.error('获取用户列表失败');
+      // 详细的错误日志
+      console.error('获取用户列表失败:', error);
+      if (error.response) {
+        console.error('错误状态:', error.response.status);
+        console.error('错误数据:', error.response.data);
+      } else if (error.request) {
+        console.error('没有收到响应:', error.request);
+      } else {
+        console.error('请求配置出错:', error.message);
+      }
+      setUsers([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (user?.role === 'super_admin') {
-      fetchUsers();
-    }
+    // 所有角色都可以获取用户列表，但根据角色过滤显示
+    fetchUsers();
   }, [user]);
 
   // 打开创建/编辑模态框
@@ -152,30 +169,82 @@ const Users = () => {
     {
       title: '操作',
       key: 'action',
-      render: (_, record) => (
-        <Space size="middle">
-          <Button 
-            icon={<EditOutlined />} 
-            onClick={() => handleOpenModal(record)}
-          >
-            编辑
-          </Button>
-          <Popconfirm
-            title="确认删除"
-            description="确定要删除这个用户吗？删除后不可恢复。"
-            onConfirm={() => handleDelete(record.id)}
-            okText="确定"
-            cancelText="取消"
-          >
+      render: (_, record) => {
+        // 操作按钮配置
+        const actions = [];
+        
+        // 普通操作员只能编辑自己
+        if (user?.role === 'operator') {
+          if (record.id === user.id) {
+            actions.push(
+              <Button 
+                icon={<EditOutlined />} 
+                onClick={() => handleOpenModal(record)}
+              >
+                编辑
+              </Button>
+            );
+          }
+        }
+        // 管理员只能编辑和删除普通操作员
+        else if (user?.role === 'admin') {
+          if (record.role === 'operator') {
+            actions.push(
+              <Button 
+                icon={<EditOutlined />} 
+                onClick={() => handleOpenModal(record)}
+              >
+                编辑
+              </Button>
+            );
+            actions.push(
+              <Popconfirm
+                title="确认删除"
+                description="确定要删除这个用户吗？删除后不可恢复。"
+                onConfirm={() => handleDelete(record.id)}
+                okText="确定"
+                cancelText="取消"
+              >
+                <Button 
+                  type="danger" 
+                  icon={<DeleteOutlined />}
+                >
+                  删除
+                </Button>
+              </Popconfirm>
+            );
+          }
+        }
+        // 超级管理员可以编辑和删除所有用户
+        else if (user?.role === 'super_admin') {
+          actions.push(
             <Button 
-              type="danger" 
-              icon={<DeleteOutlined />}
+              icon={<EditOutlined />} 
+              onClick={() => handleOpenModal(record)}
             >
-              删除
+              编辑
             </Button>
-          </Popconfirm>
-        </Space>
-      )
+          );
+          actions.push(
+            <Popconfirm
+              title="确认删除"
+              description="确定要删除这个用户吗？删除后不可恢复。"
+              onConfirm={() => handleDelete(record.id)}
+              okText="确定"
+              cancelText="取消"
+            >
+              <Button 
+                type="danger" 
+                icon={<DeleteOutlined />}
+              >
+                删除
+              </Button>
+            </Popconfirm>
+          );
+        }
+        
+        return <Space size="middle">{actions}</Space>;
+      }
     }
   ];
 
@@ -184,12 +253,22 @@ const Users = () => {
       <Card>
         <Title level={3} style={{ marginBottom: 24 }}>用户管理</Title>
         <Space style={{ marginBottom: 16 }}>
+          {/* 只有超级管理员可以添加用户 */}
+          {user?.role === 'super_admin' && (
+            <Button 
+              type="primary" 
+              icon={<PlusOutlined />} 
+              onClick={() => handleOpenModal()}
+            >
+              添加用户
+            </Button>
+          )}
+          {/* 测试按钮，用于调试 */}
           <Button 
-            type="primary" 
-            icon={<PlusOutlined />} 
-            onClick={() => handleOpenModal()}
+            type="default" 
+            onClick={fetchUsers}
           >
-            添加用户
+            刷新用户列表
           </Button>
         </Space>
         

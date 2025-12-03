@@ -58,7 +58,9 @@ const Sessions = () => {
       const response = await axiosInstance.get('/users');
       setUsers(response.data);
     } catch (error) {
-      message.error('获取用户列表失败');
+      // 根据角色不同，获取用户列表可能会失败，这是预期的权限行为，不需要显示错误信息
+      console.log('获取用户列表失败，可能是权限限制:', error.message);
+      setUsers([]);
     }
   };
 

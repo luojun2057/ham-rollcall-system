@@ -33,6 +33,14 @@ const ImportExport = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
 
+  // 检查用户是否为管理员或超级管理员
+  React.useEffect(() => {
+    if (user?.role !== 'admin' && user?.role !== 'super_admin') {
+      message.error('只有管理员或超级管理员可以访问数据导入导出页面');
+      navigate('/');
+    }
+  }, [user, navigate]);
+
   // 获取活动列表
   const fetchSessions = async () => {
     try {

@@ -7,7 +7,10 @@ import {
   message, 
   Table, 
   Progress, 
-  Input
+  Input,
+  Modal,
+  Form,
+  Select
 } from 'antd';
 import { 
   ArrowLeftOutlined, 
@@ -24,6 +27,7 @@ const { Title, Paragraph } = Typography;
 const { Search } = Input;
 
 const SessionDetail = () => {
+  const [form] = Form.useForm();
   const { id } = useParams();
   const navigate = useNavigate();
   const [session, setSession] = useState(null);
@@ -31,6 +35,9 @@ const SessionDetail = () => {
   const [filteredLogs, setFilteredLogs] = useState([]);
   const [searchText, setSearchText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [currentLog, setCurrentLog] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // 参与者记录表格列配置
   const columns = [
@@ -83,13 +90,12 @@ const SessionDetail = () => {
       dataIndex: 'operator_user_id',
       key: 'operator_user_id'
     },
-    {
-      title: '操作',
+    { title: '操作',
       key: 'action',
       render: (_, record) => (
         <Space>
-          <Button type="text" icon={<EditOutlined />} size="small">编辑</Button>
-          <Button type="text" danger icon={<DeleteOutlined />} size="small">删除</Button>
+          <Button type="text" icon={<EditOutlined />} size="small" onClick={() => handleEdit(record)}>编辑</Button>
+          <Button type="text" danger icon={<DeleteOutlined />} size="small" onClick={() => handleDelete(record.id)}>删除</Button>
         </Space>
       )
     }
@@ -121,6 +127,50 @@ const SessionDetail = () => {
       setFilteredLogs(filtered);
     } else {
       setFilteredLogs(logs);
+    }
+  };
+
+  // 打开编辑模态框
+  const handleEdit = (record) => {
+    setCurrentLog(record);
+    form.setFieldsValue(record);
+    setEditModalVisible(true);
+  };
+
+  // 关闭编辑模态框
+  const handleEditModalClose = () => {
+    setEditModalVisible(false);
+    setCurrentLog(null);
+    form.resetFields();
+  };
+
+  // 保存编辑
+  const handleSaveEdit = async () => {
+    try {
+      const values = await form.validateFields();
+      setLoading(true);
+      await axiosInstance.put(`/sessions/${id}/logs/${currentLog.id}`, values);
+      message.success('记录更新成功');
+      handleEditModalClose();
+      fetchSessionDetail();
+    } catch (error) {
+      message.error('记录更新失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 删除记录
+  const handleDelete = async (logId) => {
+    try {
+      setDeleteLoading(true);
+      await axiosInstance.delete(`/sessions/${id}/logs/${logId}`);
+      message.success('记录删除成功');
+      fetchSessionDetail();
+    } catch (error) {
+      message.error('记录删除失败');
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -265,6 +315,71 @@ const SessionDetail = () => {
             scroll={{ y: 400 }}
           />
         </Card>
+
+        {/* 编辑记录模态框 */}
+        <Modal
+          title="编辑参与者记录"
+          open={editModalVisible}
+          onOk={handleSaveEdit}
+          onCancel={handleEditModalClose}
+          confirmLoading={loading}
+          width={600}
+        >
+          <Form
+            form={form}
+            layout="vertical"
+          >
+            <Form.Item
+              name="participant_callsign"
+              label="参与者呼号"
+              rules={[{ required: true, message: '请输入参与者呼号' }]}
+            >
+              <Input placeholder="请输入参与者呼号" />
+            </Form.Item>
+            <Space.Compact style={{ width: '100%', marginBottom: 16 }}>
+              <Form.Item
+                name="rst_rcvd"
+                label="接收信号报告"
+                style={{ marginBottom: 0, marginRight: 8 }}
+                rules={[{ required: true, message: '请输入接收信号报告' }]}
+              >
+                <Input placeholder="接收信号报告" />
+              </Form.Item>
+              <Form.Item
+                name="rst_sent"
+                label="发送信号报告"
+                style={{ marginBottom: 0 }}
+                rules={[{ required: true, message: '请输入发送信号报告' }]}
+              >
+                <Input placeholder="发送信号报告" />
+              </Form.Item>
+            </Space.Compact>
+            <Form.Item
+              name="radio"
+              label="设备"
+            >
+              <Input placeholder="请输入设备信息" />
+            </Form.Item>
+            <Form.Item
+              name="antenna"
+              label="天线"
+            >
+              <Input placeholder="请输入天线信息" />
+            </Form.Item>
+            <Form.Item
+              name="power"
+              label="功率"
+            >
+              <Input placeholder="请输入功率信息" />
+            </Form.Item>
+            <Form.Item
+              name="qth_text"
+              label="QTH"
+            >
+              <Input placeholder="请输入QTH信息" />
+            </Form.Item>
+          </Form>
+        </Modal>
       </Card>
     </AppLayout>
   );

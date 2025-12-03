@@ -28,10 +28,10 @@ const Settings = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
 
-  // 检查用户是否为管理员或超级管理员
+  // 检查用户是否为超级管理员
   React.useEffect(() => {
-    if (user?.role !== 'admin' && user?.role !== 'super_admin') {
-      message.error('只有管理员或超级管理员可以访问系统管理页面');
+    if (user?.role !== 'super_admin') {
+      message.error('只有超级管理员可以访问系统管理页面');
       navigate('/');
     }
   }, [user, navigate]);

@@ -7,6 +7,7 @@ const userRoutes = require('./routes/users');
 const sessionRoutes = require('./routes/sessions');
 const logRoutes = require('./routes/logs');
 const importExportRoutes = require('./routes/importExport');
+const backupRoutes = require('./routes/backup');
 require('dotenv').config();
 
 const app = express();
@@ -22,6 +23,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api', importExportRoutes);
 app.use('/api', logRoutes);
+app.use('/api/backup', backupRoutes);
 
 // 配置静态文件服务
 const path = require('path');

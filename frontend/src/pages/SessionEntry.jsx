@@ -9,13 +9,16 @@ import {
   message, 
   Select, 
   Spin, 
-  Table
+  Table,
+  Modal
 } from 'antd';
 import {
   ArrowLeftOutlined,
   SearchOutlined,
   FileExcelOutlined,
-  FileTextOutlined
+  FileTextOutlined,
+  EditOutlined,
+  DeleteOutlined
 } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import axiosInstance from '../utils/axiosInstance';
@@ -36,6 +39,9 @@ const SessionEntry = () => {
   const [qthSearchResults, setQthSearchResults] = useState([]);
   const [showQthSearch, setShowQthSearch] = useState(false);
   const [qthSearchQuery, setQthSearchQuery] = useState('');
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [currentLog, setCurrentLog] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const qthSearchRef = useRef(null);
   const navigate = useNavigate();
   const { id } = useParams();
@@ -53,7 +59,13 @@ const SessionEntry = () => {
     { title: '设备', dataIndex: 'radio', key: 'radio' },
     { title: '天线', dataIndex: 'antenna', key: 'antenna' },
     { title: '功率', dataIndex: 'power', key: 'power' },
-    { title: 'QTH', dataIndex: 'qth_text', key: 'qth_text' }
+    { title: 'QTH', dataIndex: 'qth_text', key: 'qth_text' },
+    { title: '操作', key: 'action', render: (_, record) => (
+      <Space>
+        <Button type="text" icon={<EditOutlined />} size="small" onClick={() => handleEdit(record)}>编辑</Button>
+        <Button type="text" danger icon={<DeleteOutlined />} size="small" onClick={() => handleDelete(record.id)}>删除</Button>
+      </Space>
+    ) }
   ];
 
   // 搜索功能
@@ -63,6 +75,7 @@ const SessionEntry = () => {
       const filtered = logs.filter(log => 
         log.participant_callsign.toLowerCase().includes(value.toLowerCase())
       );
+      // 保持按时间降序排列
       setFilteredLogs(filtered);
     } else {
       setFilteredLogs(logs);
@@ -111,8 +124,14 @@ const SessionEntry = () => {
     try {
       const response = await axiosInstance.get(`/sessions/${id}`);
       setSession(response.data);
-      setLogs(response.data.logs || []);
-      setFilteredLogs(response.data.logs || []);
+      
+      // 按时间降序排列日志
+      const sortedLogs = (response.data.logs || []).sort((a, b) => {
+        return new Date(b.timestamp) - new Date(a.timestamp);
+      });
+      
+      setLogs(sortedLogs);
+      setFilteredLogs(sortedLogs);
     } catch {
       message.error('获取会话信息失败');
       // 即使获取失败，也要确保session有默认值，避免组件崩溃
@@ -162,34 +181,69 @@ const SessionEntry = () => {
     fetchSession();
     
     // 键盘事件监听
-    const handleKeyDown = (e) => {
-      // Ctrl + Enter 提交表单
-      if (e.ctrlKey && e.key === 'Enter') {
-        handleSubmit();
-      }
-      // Esc 清空表单
-      if (e.key === 'Escape') {
-        form.resetFields();
-      }
-      // F1 提交表单
-      if (e.key === 'F1') {
-        e.preventDefault();
-        handleSubmit();
-      }
-      // F2 聚焦呼号输入框
-      if (e.key === 'F2') {
-        e.preventDefault();
-        const callsignField = document.querySelector('input[name="participant_callsign"]');
-        if (callsignField) {
-          callsignField.focus();
+      const handleKeyDown = (e) => {
+        // 获取当前焦点元素
+        const activeElement = document.activeElement;
+        
+        // 处理回车事件
+        if (e.key === 'Enter') {
+          // QTH搜索时回车选择第一个并提交表单
+          if (showQthSearch && qthSearchResults.length > 0) {
+            e.preventDefault();
+            handleQthSelect(qthSearchResults[0]);
+            // 延迟一下确保表单值已更新，然后提交
+            setTimeout(() => handleSubmit(), 100);
+            return;
+          }
+          
+          // QTH输入框（非搜索状态）回车跳转到下一个输入栏
+          // 其他输入栏回车跳转到下一个输入栏
+          e.preventDefault();
+          
+          // 获取表单中的所有输入元素
+          const form = activeElement.closest('form');
+          if (form) {
+            // 获取所有可聚焦的输入元素
+            const formElements = form.querySelectorAll('input, select, textarea');
+            const elements = Array.from(formElements).filter(el => 
+              !el.disabled && !el.hidden && el.type !== 'hidden'
+            );
+            
+            // 找到当前元素的索引
+            const currentIndex = elements.indexOf(activeElement);
+            if (currentIndex >= 0 && currentIndex < elements.length - 1) {
+              // 聚焦到下一个元素
+              elements[currentIndex + 1].focus();
+            }
+          }
+          return;
         }
-      }
-      // QTH搜索时回车选择第一个
-      if (e.key === 'Enter' && showQthSearch && qthSearchResults.length > 0) {
-        e.preventDefault();
-        handleQthSelect(qthSearchResults[0]);
-      }
-    };
+        
+        // Ctrl + Enter 提交表单
+        if (e.ctrlKey && e.key === 'Enter') {
+          handleSubmit();
+        }
+        
+        // Esc 清空表单
+        if (e.key === 'Escape') {
+          form.resetFields();
+        }
+        
+        // F1 提交表单
+        if (e.key === 'F1') {
+          e.preventDefault();
+          handleSubmit();
+        }
+        
+        // F2 聚焦呼号输入框
+        if (e.key === 'F2') {
+          e.preventDefault();
+          const callsignField = document.querySelector('input[name="participant_callsign"]');
+          if (callsignField) {
+            callsignField.focus();
+          }
+        }
+      };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -261,6 +315,50 @@ const SessionEntry = () => {
     }
   };
 
+  // 打开编辑模态框
+  const handleEdit = (record) => {
+    setCurrentLog(record);
+    form.setFieldsValue(record);
+    setEditModalVisible(true);
+  };
+
+  // 关闭编辑模态框
+  const handleEditModalClose = () => {
+    setEditModalVisible(false);
+    setCurrentLog(null);
+    form.resetFields();
+  };
+
+  // 保存编辑
+  const handleSaveEdit = async () => {
+    try {
+      const values = await form.validateFields();
+      setLoading(true);
+      await axiosInstance.put(`/sessions/${id}/logs/${currentLog.id}`, values);
+      message.success('记录更新成功');
+      handleEditModalClose();
+      fetchSession();
+    } catch (error) {
+      message.error('记录更新失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 删除记录
+  const handleDelete = async (logId) => {
+    try {
+      setDeleteLoading(true);
+      await axiosInstance.delete(`/sessions/${id}/logs/${logId}`);
+      message.success('记录删除成功');
+      fetchSession();
+    } catch (error) {
+      message.error('记录删除失败');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   if (!session) {
     return (
       <AppLayout>
@@ -298,14 +396,23 @@ const SessionEntry = () => {
             >
               <Input 
                 placeholder="请输入参与者呼号" 
-                onChange={(e) => handleCallsignChange(e.target.value)}
-                onInput={(e) => {
+                onChange={(e) => {
                   // 自动转换为大写
-                  e.target.value = e.target.value.toUpperCase();
+                  const upperValue = e.target.value.toUpperCase();
                   // 更新表单值
-                  form.setFieldsValue({ participant_callsign: e.target.value });
+                  form.setFieldsValue({ participant_callsign: upperValue });
                   // 调用原有逻辑
-                  handleCallsignChange(e.target.value);
+                  handleCallsignChange(upperValue);
+                }}
+                onKeyDown={(e) => {
+                  // 呼号输入框Tab跳过信号报告栏，直接跳到设备栏
+                  if (e.key === 'Tab') {
+                    e.preventDefault();
+                    const radioField = document.querySelector('input[name="radio"]');
+                    if (radioField) {
+                      radioField.focus();
+                    }
+                  }
                 }}
                 autoFocus
               />
@@ -473,6 +580,71 @@ const SessionEntry = () => {
               style={{ maxWidth: '100%' }}
             />
           </div>
+
+          {/* 编辑记录模态框 */}
+          <Modal
+            title="编辑参与者记录"
+            open={editModalVisible}
+            onOk={handleSaveEdit}
+            onCancel={handleEditModalClose}
+            confirmLoading={loading}
+            width={600}
+          >
+            <Form
+              form={form}
+              layout="vertical"
+            >
+              <Form.Item
+                name="participant_callsign"
+                label="参与者呼号"
+                rules={[{ required: true, message: '请输入参与者呼号' }]}
+              >
+                <Input placeholder="请输入参与者呼号" />
+              </Form.Item>
+              <Space.Compact style={{ width: '100%', marginBottom: 16 }}>
+                <Form.Item
+                  name="rst_rcvd"
+                  label="接收信号报告"
+                  style={{ marginBottom: 0, marginRight: 8 }}
+                  rules={[{ required: true, message: '请输入接收信号报告' }]}
+                >
+                  <Input placeholder="接收信号报告" />
+                </Form.Item>
+                <Form.Item
+                  name="rst_sent"
+                  label="发送信号报告"
+                  style={{ marginBottom: 0 }}
+                  rules={[{ required: true, message: '请输入发送信号报告' }]}
+                >
+                  <Input placeholder="发送信号报告" />
+                </Form.Item>
+              </Space.Compact>
+              <Form.Item
+                name="radio"
+                label="设备"
+              >
+                <Input placeholder="请输入设备信息" />
+              </Form.Item>
+              <Form.Item
+                name="antenna"
+                label="天线"
+              >
+                <Input placeholder="请输入天线信息" />
+              </Form.Item>
+              <Form.Item
+                name="power"
+                label="功率"
+              >
+                <Input placeholder="请输入功率信息" />
+              </Form.Item>
+              <Form.Item
+                name="qth_text"
+                label="QTH"
+              >
+                <Input placeholder="请输入QTH信息" />
+              </Form.Item>
+            </Form>
+          </Modal>
         </Space>
       </Card>
     </AppLayout>
