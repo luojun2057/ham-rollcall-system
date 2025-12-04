@@ -1,4 +1,4 @@
-# 极简版Dockerfile
+# 使用本地已下载的node:18-alpine镜像
 FROM node:18-alpine
 WORKDIR /app
 
